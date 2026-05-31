@@ -1,27 +1,28 @@
-# OpenStack Template: Packer (Image) + Terraform (Deployment)
+# OpenStack App: Jupyter Notebook (Multi-User)
 
-Dieses Repository ist ein **Template** für OpenStack-Projekte mit sauberer Trennung von:
-- **Packer**: baut ein wiederverwendbares **Image**
-- **Terraform**: deployt **Infrastruktur** (VM, Security Group, optional Floating IP)
+Dieses Repository erstellt ein **Jupyter Notebook System** auf OpenStack mit sauberer Trennung von:
+- **Packer**: baut ein wiederverwendbares **Image** mit JupyterHub
+- **Terraform**: deployt **Infrastruktur** und **User/Groups** (eine gemeinsame VM)
 
-Es enthält **keine App**. Du füllst nur die Stellen aus, an denen du deine eigene Anwendung/Runtime ins Image bringst.
+**Wichtig:** Die Struktur und das User/Group-Handling sind identisch zu Ubuntu-App, aber die App ist JupyterHub.
 
 ---
 
 ## Struktur
 
 ```plaintext
-template-app/
+jupyter-notebook/
 ├── packer/
 │   ├── template.pkr.hcl          # Packer Template (Image Build)
 │   ├── packer.pkrvars.hcl.example  # Beispiel-Variablen (kopieren/ausfüllen)
 │   └── scripts/
-│       └── provision.sh          # Provisioning Skeleton (DEIN Inhalt)
+│       └── provision.sh          # Provisioning (JupyterHub + JupyterLab)
 │
 ├── terraform/
-│   ├── main.tf                   # OpenStack Ressourcen (VM, SG, FIP)
+│   ├── main.tf                   # OpenStack Ressourcen (Shared VM + User)
 │   ├── variables.tf              # Variablen
 │   ├── outputs.tf                # Outputs
+│   ├── cloud-init-multi-user.yml.tpl # User/Group + JupyterHub Start
 │   └── terraform.tfvars.example  # Beispiel-Variablen (kopieren/ausfüllen)
 │
 ├── .github/workflows/
@@ -125,26 +126,20 @@ packer build \
 `packer.pkrvars.hcl` ist lokal/projekt-spezifisch und sollte nicht committet werden.
 
 **Typische Werte, die du setzen musst:**
-- `image_name` - Name deines Output-Images
-- `source_image_name` - Base-Image (z.B. "Ubuntu 22.04")
-- `flavor` - VM-Größe für Build (z.B. "gp1.small")
+- `image_name` - Name deines Output-Images (z.B. `jupyter-notebook-v1`)
 - `networks` - Liste der Netzwerk-UUIDs für Build-VM
-- optional: `security_groups`, `floating_ip_pool` (falls Build-VM extern erreichbar sein muss)
+- `security_groups` - Security Group für Build-VM
 
-### 2.2 Provisioning anpassen (DEIN Inhalt)
+### 2.2 Provisioning anpassen
 
 **Datei:** `packer/scripts/provision.sh`
 
-Hier definierst du, was ins Image kommt:
-- Pakete/Runtime installieren
-- App-Artefakte deployen (z.B. Binary, Container, Webapp)
-- Konfiguration
-- systemd Services
-- (optional) Reverse Proxy / TLS
+Dieses Script installiert:
+- JupyterHub + JupyterLab
+- systemd-Service
+- Basis-Tools
 
-**Wichtig:**
-- keine Secrets hardcoden
-- idempotent schreiben (mehrfaches Ausführen sollte nicht kaputt machen)
+Es ist idempotent und für CI/CD geeignet.
 
 ---
 
@@ -174,15 +169,11 @@ cp terraform.tfvars.example terraform.tfvars
 `terraform.tfvars` ist lokal/projekt-spezifisch und sollte nicht committet werden.
 
 **Typische Werte, die du setzen musst:**
-- `instance_name`
 - `image_name` (muss zum Packer-Output passen)
-- `flavor`
-- `key_pair`
 - `network_uuid`
-- `enable_floating_ip` (true/false)
 - optional: `floating_ip_pool`
-- `allowed_tcp_ports` (öffentliche Ports, z.B. [80, 443])
-- `ssh_cidr` (am besten deine.ip/32)
+- `shared_secgroup_id` (muss Port 8000 und SSH erlauben)
+- `users` (Teams mit User-Emails)
 
 ---
 
@@ -195,10 +186,9 @@ terraform apply
 ```
 
 **Nach apply bekommst du Outputs wie:**
-- `instance_id`
-- `private_ip`
-- `floating_ip` (falls enabled)
-- `access_url`
+- `user_accounts` (JupyterHub Logins)
+- `vm_details` (IP + Jupyter URL)
+- `users_summary`
 
 ---
 
@@ -237,9 +227,9 @@ openstack image delete <IMAGE_ID>
 - Wenn Build-VM nur intern erreichbar: Runner muss im selben Netz sein oder
 - `use_floating_ip=true` + `floating_ip_pool` setzen
 
-### VM ist deployed, aber Service nicht erreichbar
-- `allowed_tcp_ports` in Terraform setzen (z.B. [80] oder [443])
-- Service im Image läuft wirklich? (systemd status, logs, etc.)
+### VM ist deployed, aber JupyterHub nicht erreichbar
+- Security Group muss Port **8000/TCP** erlauben
+- Service prüfen: `systemctl status jupyterhub`
 - ggf. `enable_floating_ip=false` → dann nur intern erreichbar (private IP)
 
 ---
@@ -272,14 +262,14 @@ export OS_CLOUD=openstack
 cd packer
 cp packer.pkrvars.hcl.example packer.pkrvars.hcl
 # -> packer.pkrvars.hcl ausfüllen
-# -> provision.sh mit eigener App füllen
+# -> provision.sh ist bereits für JupyterHub vorbereitet
 packer init .
 packer build -var-file=packer.pkrvars.hcl .
 
 # 3) Deploy
 cd ../terraform
 cp terraform.tfvars.example terraform.tfvars
-# -> terraform.tfvars ausfüllen (image_name!)
+# -> terraform.tfvars ausfüllen (image_name + users)
 terraform init
 terraform apply
 ```
@@ -299,6 +289,6 @@ terraform apply
 - **Testing**: Teste Image-Builds in separater Umgebung
 
 ### Operations
-- **Monitoring**: Implementiere Health-Checks in deiner App
-- **Logs**: Nutze structured logging (JSON) für bessere Auswertung
+- **Monitoring**: Überwache JupyterHub-Logs und Service-Status
+- **Logs**: Nutze strukturierte Logs für bessere Auswertung
 - **Backups**: Plane Backup-Strategien für persistente Daten

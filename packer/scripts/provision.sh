@@ -2,67 +2,77 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# TEMPLATE Provisioning Script
-# Ziel: Hier kommt *deine* App/Runtime rein.
-#
-# Regeln:
-# - idempotent schreiben (mehrfaches Ausführen darf nicht kaputt machen)
-# - keine Secrets hardcoden (nutze CI, Vault, cloud-init, env vars, etc.)
-# - am Ende: Service läuft / Artefakte liegen / Ports passen zur SG
+# Jupyter Notebook / JupyterHub Provisioning Script
+# - Mehrbenutzer-Betrieb via JupyterHub (PAM + System-User)
+# - Idempotent, reproduzierbar, CI/CD-tauglich
 # -----------------------------------------------------------------------------
 
-echo "Waiting for cloud-init (if present)..."
+echo "Warte auf cloud-init (sofern vorhanden)..."
 cloud-init status --wait || true
 
-# Baseline (optional):
-# - Updates / Base-Pakete
-# - Logs/Debug
-echo "Updating package lists..."
+echo "System aktualisieren..."
 sudo apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get -y upgrade
 
-# -----------------------------------------------------------------------------
-# [1] Runtime installieren: minimaler Webserver (nginx)
-# -----------------------------------------------------------------------------
-echo "Installing nginx (if not already installed)..."
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nginx
+echo "Installiere Basis-Pakete..."
+sudo apt-get install -y --no-install-recommends \
+  curl ca-certificates git \
+  python3 python3-venv python3-pip \
+  nodejs npm
 
-echo "Enabling and restarting nginx..."
-sudo systemctl enable nginx
-sudo systemctl restart nginx
+# SSH-Passwort-Authentifizierung vorbereiten (für cloud-init)
+echo "Bereite SSH für Passwort-Auth vor..."
+sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
-# -----------------------------------------------------------------------------
-# [2] App-Artefakt: einfache HTML-Seite
-# -----------------------------------------------------------------------------
-echo "Deploying simple index.html..."
-sudo mkdir -p /var/www/html
+echo "Installiere JupyterHub + JupyterLab..."
+if [ ! -d "/opt/jupyterhub" ]; then
+  sudo python3 -m venv /opt/jupyterhub
+fi
 
-sudo tee /var/www/html/index.html >/dev/null << 'EOF'
-<html>
-  <head>
-    <title>myapp2</title>
-  </head>
-  <body>
-    <h1>Hello from myapp2!</h1>
-    <p>Built with Packer & deployed with Terraform.</p>
-  </body>
-</html>
+sudo /opt/jupyterhub/bin/pip install --upgrade pip
+sudo /opt/jupyterhub/bin/pip install jupyterhub jupyterlab
+
+echo "Installiere configurable-http-proxy..."
+sudo npm install -g configurable-http-proxy
+
+echo "Konfiguriere JupyterHub..."
+sudo mkdir -p /etc/jupyterhub
+
+sudo tee /etc/jupyterhub/jupyterhub_config.py >/dev/null << 'EOF'
+c = get_config()
+c.JupyterHub.bind_url = "http://0.0.0.0:8000"
+c.JupyterHub.spawner_class = "jupyterhub.spawner.LocalProcessSpawner"
+c.Spawner.default_url = "/lab"
+c.Authenticator.admin_users = set()
 EOF
 
-# -----------------------------------------------------------------------------
-# [3] (Optional) eigener systemd-Service
-# - hier nicht nötig, nginx reicht als Webserver
-# -----------------------------------------------------------------------------
-# Beispiel bleibt auskommentiert
+echo "Systemd-Service für JupyterHub erstellen..."
+sudo tee /etc/systemd/system/jupyterhub.service >/dev/null << 'EOF'
+[Unit]
+Description=JupyterHub
+After=network.target
 
-# -----------------------------------------------------------------------------
-# [4] Optional: Reverse Proxy / TLS / Firewall
-# - für das Minimal-Beispiel nicht nötig
-# -----------------------------------------------------------------------------
+[Service]
+Type=simple
+ExecStart=/opt/jupyterhub/bin/jupyterhub -f /etc/jupyterhub/jupyterhub_config.py
+Restart=always
+RestartSec=10
 
-# -----------------------------------------------------------------------------
-# [5] Cleanup (optional, wenn du kleinere Images willst)
-# -----------------------------------------------------------------------------
-# sudo apt-get clean
-# sudo rm -rf /var/lib/apt/lists/*
+[Install]
+WantedBy=multi-user.target
+EOF
 
-echo "Provisioning finished."
+sudo systemctl daemon-reload
+sudo systemctl enable jupyterhub
+sudo systemctl restart jupyterhub
+
+echo "Cleanup: apt-Cache & Listen entfernen..."
+sudo apt-get clean
+sudo rm -rf /var/lib/apt/lists/*
+
+echo "Setze machine-id zurück..."
+sudo truncate -s 0 /etc/machine-id
+sudo rm -f /var/lib/dbus/machine-id || true
+
+echo "Provisioning abgeschlossen."
