@@ -25,7 +25,7 @@ output "user_accounts" {
 
 output "user_logins" {
   description = "[CONTRACT] Lesbare Login-Daten (Username, Email, Passwort, URL)"
-  sensitive   = false
+  sensitive   = true
   value = length(local.all_users) > 0 ? [
     for i in range(length(local.all_users)) : {
       username = local.usernames[i]

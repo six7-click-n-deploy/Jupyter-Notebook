@@ -46,6 +46,7 @@ sudo tee /etc/jupyterhub/jupyterhub_config.py >/dev/null << 'EOF'
 c = get_config()
 c.JupyterHub.bind_url = "http://0.0.0.0:8000"
 c.JupyterHub.spawner_class = "jupyterhub.spawner.LocalProcessSpawner"
+c.Spawner.cmd = ["/opt/jupyterhub/bin/jupyterhub-singleuser"]
 c.Spawner.default_url = "/lab"
 c.Authenticator.admin_users = set()
 c.Authenticator.allow_all = True
