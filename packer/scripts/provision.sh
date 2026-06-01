@@ -17,8 +17,11 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get -y upgrade
 echo "Installiere Basis-Pakete..."
 sudo apt-get install -y --no-install-recommends \
   curl ca-certificates git \
-  python3 python3-venv python3-pip \
-  nodejs npm
+  python3 python3-venv python3-pip
+
+echo "Installiere Node.js (LTS) + npm..."
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y --no-install-recommends nodejs
 
 # SSH-Passwort-Authentifizierung vorbereiten (für cloud-init)
 echo "Bereite SSH für Passwort-Auth vor..."
@@ -33,8 +36,8 @@ fi
 sudo /opt/jupyterhub/bin/pip install --upgrade pip
 sudo /opt/jupyterhub/bin/pip install jupyterhub jupyterlab
 
-echo "Installiere configurable-http-proxy..."
-sudo npm install -g configurable-http-proxy
+echo "Installiere configurable-http-proxy (stabile Version)..."
+sudo npm install -g configurable-http-proxy@5.2.0
 
 echo "Konfiguriere JupyterHub..."
 sudo mkdir -p /etc/jupyterhub
@@ -45,6 +48,7 @@ c.JupyterHub.bind_url = "http://0.0.0.0:8000"
 c.JupyterHub.spawner_class = "jupyterhub.spawner.LocalProcessSpawner"
 c.Spawner.default_url = "/lab"
 c.Authenticator.admin_users = set()
+c.Authenticator.allow_all = True
 EOF
 
 echo "Systemd-Service für JupyterHub erstellen..."

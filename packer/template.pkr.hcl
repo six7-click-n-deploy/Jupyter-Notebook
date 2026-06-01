@@ -62,5 +62,7 @@ build {
     script = local.provision_script
     # Retry bei temporären Netzwerkfehlern (apt-get)
     max_retries = 3
+    # SSH kann während apt/sshd-Updates kurz neu starten
+    expect_disconnect = true
   }
 }

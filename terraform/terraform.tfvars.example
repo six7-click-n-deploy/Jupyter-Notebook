@@ -1,0 +1,15 @@
+image_name       = "jupyter-notebook-v1"
+network_uuid     = "34a00b87-57ce-42c4-8e1b-9ea8a657ec2e"
+floating_ip_pool = "DHBW"
+shared_secgroup_id = "4ffaf007-df66-4250-9118-1bd99378d34a"
+
+# Test-User (Teams mit E-Mails)
+users = {
+	team1 = [
+		{ email = "user1@example.com" },
+		{ email = "user2@example.com" }
+	]
+	team2 = [
+		{ email = "user3@example.com" }
+	]
+}

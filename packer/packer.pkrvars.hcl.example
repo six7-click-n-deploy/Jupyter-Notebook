@@ -1,0 +1,7 @@
+image_name = "jupyter-notebook-v1"
+
+# OpenStack Netzwerk-UUIDs für Build-VM
+networks = ["4971e080-966d-485e-a161-3e2b7fefad53"]
+
+# Security Groups für Build-VM
+security_groups = ["4ffaf007-df66-4250-9118-1bd99378d34a"]
