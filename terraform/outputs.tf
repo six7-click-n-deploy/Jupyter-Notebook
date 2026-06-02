@@ -25,12 +25,12 @@ output "user_accounts" {
 
 output "user_logins" {
   description = "[CONTRACT] Lesbare Login-Daten (Username, Email, Passwort, URL)"
-  sensitive   = true
+  sensitive   = false
   value = length(local.all_users) > 0 ? [
     for i in range(length(local.all_users)) : {
       username = local.usernames[i]
       email    = local.emails[i]
-      password = random_password.user_passwords[i].result
+      password = nonsensitive(random_password.user_passwords[i].result)
       team     = local.all_users[i].team
       url      = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
     }
@@ -53,6 +53,7 @@ output "vm_details" {
       users = [for i in range(length(local.all_users)) : {
         username     = local.usernames[i]
         team         = local.all_users[i].team
+        password     = nonsensitive(random_password.user_passwords[i].result)
         jupyter_login = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
       }]
     }
@@ -66,6 +67,7 @@ output "users_summary" {
     user_count = length(local.all_users)
     usernames  = local.usernames
     emails     = local.emails
+    passwords  = [for p in random_password.user_passwords : nonsensitive(p.result)]
     teams      = local.unique_teams
   }
 }
