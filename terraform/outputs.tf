@@ -2,72 +2,43 @@
 # [CONTRACT] User Accounts Output
 ############################
 
+# CONTRACT-SCHEMA:
+# local.user_accounts = {
+#   "<team>-<username>": {
+#     type     = "password"
+#     ip       = "1.2.3.4"
+#     port     = 8080
+#     username = "john-doe"
+#     auth     = "<password>"
+#   }
+# }
+
 output "user_accounts" {
-  description = "[CONTRACT] JupyterHub-Accounts mit Login-Informationen"
+  description = "[CONTRACT] User accounts - Struktur siehe Kommentar oben"
+  value       = local.user_accounts
   sensitive   = true # Enthält Passwörter
-  value = length(local.all_users) > 0 ? {
-    for i in range(length(local.all_users)) : local.user_ids[i] => {
-      type     = "password"
-      ip       = local.enable_floating_ip ? openstack_networking_floatingip_v2.fip[0].address : openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4
-      port     = 8000
-      username = local.usernames[i]
-      auth     = random_password.user_passwords[i].result
-      email    = local.emails[i]
-      team     = local.all_users[i].team
-      url      = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
-    }
-  } : {}
 }
 
 ############################
-# [CONTRACT] User Login Output (lesbar)
+# Team-VM Details
 ############################
 
-output "user_logins" {
-  description = "[CONTRACT] Lesbare Login-Daten (Username, Email, Passwort, URL)"
-  sensitive   = false
-  value = length(local.all_users) > 0 ? [
-    for i in range(length(local.all_users)) : {
-      username = local.usernames[i]
-      email    = local.emails[i]
-      password = nonsensitive(random_password.user_passwords[i].result)
-      team     = local.all_users[i].team
-      url      = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
-    }
-  ] : []
-}
-
-############################
-# VM Details
-############################
-
-output "vm_details" {
-  description = "Details der gemeinsamen VM und aller Benutzer"
-  value = local.vm_count > 0 ? {
-    shared_vm = {
-      instance_id   = openstack_compute_instance_v2.shared_vm.id
-      instance_name = openstack_compute_instance_v2.shared_vm.name
-      fixed_ip      = openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4
-      floating_ip   = local.enable_floating_ip ? openstack_networking_floatingip_v2.fip[0].address : null
-      jupyter_url   = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
-      users = [for i in range(length(local.all_users)) : {
-        username     = local.usernames[i]
-        team         = local.all_users[i].team
-        password     = nonsensitive(random_password.user_passwords[i].result)
-        jupyter_login = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
-      }]
-    }
-  } : {}
-}
-
-output "users_summary" {
-  description = "Übersicht: Anzahl VMs und User"
+output "team_vms" {
+  description = "Details aller Team-VMs"
   value = {
-    vm_count   = local.vm_count
-    user_count = length(local.all_users)
-    usernames  = local.usernames
-    emails     = local.emails
-    passwords  = [for p in random_password.user_passwords : nonsensitive(p.result)]
-    teams      = local.unique_teams
+    for team in local.teams_list : team => {
+      instance_id     = openstack_compute_instance_v2.shared_vm.id
+      instance_name   = openstack_compute_instance_v2.shared_vm.name
+      fixed_ip        = openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4
+      floating_ip     = local.enable_floating_ip ? openstack_networking_floatingip_v2.fip[0].address : null
+      code_server_url = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
+    }
+  }
+}
+
+output "teams_summary" {
+  description = "Übersicht: Teams und User-Anzahl"
+  value = {
+    for team in local.teams_list : team => length([for uid, u in local.users_map : u if u.team == team])
   }
 }

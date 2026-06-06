@@ -62,6 +62,11 @@ locals {
   usernames = [for user in local.all_users : user.username]
   emails    = [for user in local.all_users : user.email]
   user_ids  = [for user in local.all_users : user.id]
+
+  # Map für schnelle Lookup-Operationen
+  users_map    = { for user in local.all_users : user.id => user }
+  teams_list   = distinct([for user in local.all_users : user.team])
+  user_indices = { for idx, user in local.all_users : user.id => idx }
 }
 
 # Passwörter für jeden User generieren
@@ -74,6 +79,19 @@ resource "random_password" "user_passwords" {
   min_lower   = 1
   min_numeric = 1
   min_special = 1
+}
+
+locals {
+  # [CONTRACT] User Accounts Output (Online-IDE kompatibel)
+  user_accounts = length(local.all_users) > 0 ? {
+    for uid, user in local.users_map : uid => {
+      type     = "password"
+      ip       = local.enable_floating_ip ? openstack_networking_floatingip_v2.fip[0].address : openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4
+      port     = 8000
+      username = user.username
+      auth     = random_password.user_passwords[local.user_indices[uid]].result
+    }
+  } : {}
 }
 
 # Packer-built image lookup by name (keine IDs hardcoden)
@@ -120,7 +138,6 @@ resource "openstack_compute_instance_v2" "shared_vm" {
   metadata = merge(local.metadata, {
     teams  = join(",", local.unique_teams)
     users  = join(",", local.usernames)
-    emails = join(",", local.emails)
   })
 }
 
