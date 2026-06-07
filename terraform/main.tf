@@ -44,7 +44,7 @@ locals {
   all_users = flatten([
     for team, members in var.users : [
       for member in members : {
-        id       = "${team}-${replace(split("@", member.email)[0], ".", "-")}" 
+        id       = "${team}-${replace(split("@", member.email)[0], ".", "-")}"
         team     = team
         email    = member.email
         username = replace(split("@", member.email)[0], ".", "")
@@ -136,8 +136,8 @@ resource "openstack_compute_instance_v2" "shared_vm" {
   })
 
   metadata = merge(local.metadata, {
-    teams  = join(",", local.unique_teams)
-    users  = join(",", local.usernames)
+    teams = join(",", local.unique_teams)
+    users = join(",", local.usernames)
   })
 }
 
