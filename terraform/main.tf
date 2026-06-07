@@ -55,13 +55,8 @@ locals {
   # Eindeutige Teams extrahieren
   unique_teams = distinct([for user in local.all_users : user.team])
 
-  # VM-Anzahl = 1 (eine gemeinsame VM)
-  vm_count = 1
-
   # Liste aller Usernamen und E-Mails
   usernames = [for user in local.all_users : user.username]
-  emails    = [for user in local.all_users : user.email]
-  user_ids  = [for user in local.all_users : user.id]
 
   # Map für schnelle Lookup-Operationen
   users_map    = { for user in local.all_users : user.id => user }
