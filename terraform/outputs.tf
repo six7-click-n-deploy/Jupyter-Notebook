@@ -27,11 +27,11 @@ output "team_vms" {
   description = "Details aller Team-VMs"
   value = {
     for team in local.teams_list : team => {
-      instance_id     = openstack_compute_instance_v2.shared_vm.id
-      instance_name   = openstack_compute_instance_v2.shared_vm.name
-      fixed_ip        = openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4
-      floating_ip     = local.enable_floating_ip ? openstack_networking_floatingip_v2.fip[0].address : null
-      code_server_url = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
+      instance_id   = openstack_compute_instance_v2.shared_vm.id
+      instance_name = openstack_compute_instance_v2.shared_vm.name
+      fixed_ip      = openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4
+      floating_ip   = local.enable_floating_ip ? openstack_networking_floatingip_v2.fip[0].address : null
+      url           = local.enable_floating_ip ? "http://${openstack_networking_floatingip_v2.fip[0].address}:8000" : "http://${openstack_compute_instance_v2.shared_vm.network[0].fixed_ip_v4}:8000"
     }
   }
 }
